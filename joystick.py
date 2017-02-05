@@ -34,8 +34,6 @@ JOY_USEDEADZONE = 0x800
 JOY_RETURNALL = JOY_RETURNX | JOY_RETURNY | JOY_RETURNZ | JOY_RETURNR | JOY_RETURNU | JOY_RETURNV | JOY_RETURNPOV | JOY_RETURNBUTTONS
 
 # This is the mapping for my XBox 360 controller.
-button_names = ['a', 'b', 'x', 'y', 'tl', 'tr', 'back', 'start', 'thumbl', 'thumbr']
-povbtn_names = ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left']
 
 # Define some structures from WinMM that we will use in function calls.
 class JOYCAPS(ctypes.Structure):
@@ -91,112 +89,136 @@ class JOYINFOEX(ctypes.Structure):
         ('dwReserved2', DWORD),
     ]
 
-# Get the number of supported devices (usually 16).
-num_devs = joyGetNumDevs()
-if num_devs == 0:
-    print("Joystick driver not loaded.")
+class Joystick(object):
+    def __init__(self, joyId):
 
-# Number of the joystick to open.
-joy_id = 0
+        self.button_names = ['a', 'b', 'x', 'y', 'tl', 'tr', 'back', 'start', 'thumbl', 'thumbr']
+        self.povbtn_names = ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left']    
+        
+        # Get the number of supported devices (usually 16).
+        num_devs = joyGetNumDevs()
+        if num_devs == 0:
+            print("Joystick driver not loaded.")
 
-# Check if the joystick is plugged in.
-info = JOYINFO()
-p_info = ctypes.pointer(info)
-if joyGetPos(0, p_info) != 0:
-    print("Joystick %d not plugged in." % (joy_id + 1))
+        # Number of the joystick to open.
+        self.joy_id = joyId
 
-# Get device capabilities.
-caps = JOYCAPS()
-if joyGetDevCaps(joy_id, ctypes.pointer(caps), ctypes.sizeof(JOYCAPS)) != 0:
-    print("Failed to get device capabilities.")
+        # Check if the joystick is plugged in.
+        self.info = JOYINFO()
+        self.p_info = ctypes.pointer(self.info)
+        if joyGetPos(0, self.p_info) != 0:
+            print("Joystick %d not plugged in." % (self.joy_id + 1))
 
-print("Driver name:", caps.szPname)
+        # Get device capabilities.
+        self.caps = JOYCAPS()
+        if joyGetDevCaps(self.joy_id, ctypes.pointer(self.caps), ctypes.sizeof(JOYCAPS)) != 0:
+            print("Failed to get device capabilities.")
 
-# Fetch the name from registry.
-key = None
-if len(caps.szRegKey) > 0:
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "System\\CurrentControlSet\\Control\\MediaResources\\Joystick\\%s\\CurrentJoystickSettings" % (caps.szRegKey))
-    except WindowsError:
-        key = None
+        print("Driver name:", self.caps.szPname)
 
-if key:
-    oem_name = winreg.QueryValueEx(key, "Joystick%dOEMName" % (joy_id + 1))
-    if oem_name:
-        key2 = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "System\\CurrentControlSet\\Control\\MediaProperties\\PrivateProperties\\Joystick\\OEM\\%s" % (oem_name[0]))
-        if key2:
-            oem_name = winreg.QueryValueEx(key2, "OEMName")
-            print("OEM name:", oem_name[0])
-        key2.Close()
+        # Fetch the name from registry.
+        self.key = None
+        if len(self.caps.szRegKey) > 0:
+            try:
+                self.key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "System\\CurrentControlSet\\Control\\MediaResources\\Joystick\\%s\\CurrentJoystickSettings" % (self.caps.szRegKey))
+            except WindowsError:
+                self.key = None
 
-# Set the initial button states.
-button_states = {}
-for b in range(caps.wNumButtons):
-    name = button_names[b]
-    if (1 << b) & info.wButtons:
-        button_states[name] = True
-    else:
-        button_states[name] = False
+        if self.key:
+            self.oem_name = winreg.QueryValueEx(self.key, "Joystick%dOEMName" % (self.joy_id + 1))
+            if self.oem_name:
+                key2 = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "System\\CurrentControlSet\\Control\\MediaProperties\\PrivateProperties\\Joystick\\OEM\\%s" % (self.oem_name[0]))
+                if key2:
+                    self.oem_name = winreg.QueryValueEx(key2, "OEMName")
+                    print("OEM name:", self.oem_name[0])
+                key2.Close()
 
-for name in povbtn_names:
-    button_states[name] = False
+        # Set the initial button states.
+        self.button_states = {}
+        for b in range(self.caps.wNumButtons):
+            name = self.button_names[b]
+            if (1 << b) & self.info.wButtons:
+                self.button_states[name] = True
+            else:
+                self.button_states[name] = False
 
-buttons_text = ""
+        for name in self.povbtn_names:
+            self.button_states[name] = False
 
-# Initialise the JOYINFOEX structure.
-info = JOYINFOEX()
-info.dwSize = ctypes.sizeof(JOYINFOEX)
-info.dwFlags = JOY_RETURNBUTTONS | JOY_RETURNCENTERED | JOY_RETURNPOV | JOY_RETURNU | JOY_RETURNV | JOY_RETURNX | JOY_RETURNY | JOY_RETURNZ
-p_info = ctypes.pointer(info)
+        self.buttons_text = ""
 
-# Fetch new joystick data until it returns non-0 (that is, it has been unplugged)
-while joyGetPosEx(0, p_info) == 0:
-    # Remap the values to float
-    x = (info.dwXpos - 32767) / 32768.0
-    y = (info.dwYpos - 32767) / 32768.0
-    trig = (info.dwZpos - 32767) / 32768.0
-    rx = (info.dwRpos - 32767) / 32768.0
-    ry = (info.dwUpos - 32767) / 32768.0
+        # Initialise the JOYINFOEX structure.
+        self.info = JOYINFOEX()
+        self.info.dwSize = ctypes.sizeof(JOYINFOEX)
+        self.info.dwFlags = JOY_RETURNBUTTONS | JOY_RETURNCENTERED | JOY_RETURNPOV | JOY_RETURNU | JOY_RETURNV | JOY_RETURNX | JOY_RETURNY | JOY_RETURNZ
+        self.p_info = ctypes.pointer(self.info)
 
-    # NB.  Windows drivers give one axis for the trigger, but I want to have
-    # two for compatibility with platforms that do support them as separate axes.
-    # This means it'll behave strangely when both triggers are pressed, though.
-    lt = max(-1.0,  trig * 2 - 1.0)
-    rt = max(-1.0, -trig * 2 - 1.0)
+    def poll(self):
 
-    # Figure out which buttons are pressed.
-    for b in range(caps.wNumButtons):
-        pressed = (0 != (1 << b) & info.dwButtons)
-        name = button_names[b]
-        button_states[name] = pressed
+        # Fetch new joystick data until it returns non-0 (that is, it has been unplugged)
 
-    # Determine the state of the POV buttons using the provided POV angle.
-    if info.dwPOV == 65535:
-        povangle1 = None
-        povangle2 = None
-    else:
-        angle = info.dwPOV / 9000.0
-        povangle1 = int(floor(angle)) % 4
-        povangle2 = int(ceil(angle)) % 4
+        if joyGetPosEx(self.joy_id, self.p_info) == 0:
+            # Remap the values to float
+            x = (self.info.dwXpos - 32767) / 32768.0
+            y = (self.info.dwYpos - 32767) / 32768.0
+            trig = (self.info.dwZpos - 32767) / 32768.0
+            rx = (self.info.dwRpos - 32767) / 32768.0
+            ry = (self.info.dwUpos - 32767) / 32768.0
 
-    for i, btn in enumerate(povbtn_names):
-        if i == povangle1 or i == povangle2:
-            button_states[btn] = True
-        else:
-            button_states[btn] = False
+            # NB.  Windows drivers give one axis for the trigger, but I want to have
+            # two for compatibility with platforms that do support them as separate axes.
+            # This means it'll behave strangely when both triggers are pressed, though.
+            lt = max(-1.0,  trig * 2 - 1.0)
+            rt = max(-1.0, -trig * 2 - 1.0)
 
-    # Format a list of currently pressed buttons.
-    prev_len = len(buttons_text)
-    buttons_text = " "
-    for btn in button_names + povbtn_names:
-        if button_states.get(btn):
-            buttons_text += btn + ' '
+            # Figure out which buttons are pressed.
+            for b in range(self.caps.wNumButtons):
+                pressed = (0 != (1 << b) & self.info.dwButtons)
+                name = self.button_names[b]
+                self.button_states[name] = pressed
 
-    # Add spaces to erase data from the previous line
-    erase = ' ' * max(0, prev_len - len(buttons_text))
+            # Determine the state of the POV buttons using the provided POV angle.
+            if self.info.dwPOV == 65535:
+                povangle1 = None
+                povangle2 = None
+            else:
+                angle = self.info.dwPOV / 9000.0
+                povangle1 = int(floor(angle)) % 4
+                povangle2 = int(ceil(angle)) % 4
 
-    # Display the x, y, trigger values.
-    print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, buttons_text, erase))
+            for i, btn in enumerate(self.povbtn_names):
+                if i == povangle1 or i == povangle2:
+                    self.button_states[btn] = True
+                else:
+                    self.button_states[btn] = False
 
-    #print info.dwXpos, info.dwYpos, info.dwZpos, info.dwRpos, info.dwUpos, info.dwVpos, info.dwButtons, info.dwButtonNumber, info.dwPOV, info.dwReserved1, info.dwReserved2
-    time.sleep(0.01)
+            # Format a list of currently pressed buttons.
+            prev_len = len(self.buttons_text)
+            buttons_text = " "
+            for btn in self.button_names + self.povbtn_names:
+                if self.button_states.get(btn):
+                    buttons_text += btn + ' '
+
+            # Add spaces to erase data from the previous line
+            erase = ' ' * max(0, prev_len - len(buttons_text))
+
+            # Display the x, y, trigger values.
+            #print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, buttons_text, erase))
+            self.x = x
+            self.y = y
+            self.lt = lt
+            self.rx = rx
+            self.ry = ry
+            self.rt = rt
+            self.buttons_text = buttons_text
+            #print info.dwXpos, info.dwYpos, info.dwZpos, info.dwRpos, info.dwUpos, info.dwVpos, info.dwButtons, info.dwButtonNumber, info.dwPOV, info.dwReserved1, info.dwReserved2
+            #time.sleep(0.01)
+
+
+if __name__ == "__main__":
+
+    joystick = Joystick(1)
+
+    while True:
+        joystick.poll()
+        time.sleep(0.01)
