@@ -106,13 +106,16 @@ class Joystick(object):
         # Check if the joystick is plugged in.
         self.info = JOYINFO()
         self.p_info = ctypes.pointer(self.info)
+        self.connected = True
         if joyGetPos(0, self.p_info) != 0:
             print("Joystick %d not plugged in." % (self.joy_id + 1))
+            self.connected = False
 
         # Get device capabilities.
         self.caps = JOYCAPS()
         if joyGetDevCaps(self.joy_id, ctypes.pointer(self.caps), ctypes.sizeof(JOYCAPS)) != 0:
             print("Failed to get device capabilities.")
+            self.connected = False
 
         print("Driver name:", self.caps.szPname)
 

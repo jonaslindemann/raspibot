@@ -36,10 +36,18 @@ class RemoteControlWindow(QWidget):
 
         # Initalise joystick object
 
-        self.joystick = Joystick(1)
-        self.joystickThread = JoystickThread(self, self.joystick)
-        self.joystickThread.setTerminationEnabled(True)
-        self.joystickThread.update.connect(self.on_joystickUpdate)
+        i = 0
+        self.joystick = Joystick(i)
+        while not self.joystick.connected:
+            i = i + 1
+            self.joystick = Joystick(i)
+            if i>4:
+                break
+
+        if self.joystick.connected:
+            self.joystickThread = JoystickThread(self, self.joystick)
+            self.joystickThread.setTerminationEnabled(True)
+            self.joystickThread.update.connect(self.on_joystickUpdate)
 
         # Load user interface from UI-file
 
@@ -100,8 +108,9 @@ class RemoteControlWindow(QWidget):
         print("Connecting...")
         self.robot.connect("tcp://raspi3.home.local:4242")
 
-        print("Starting joystick thread...")
-        self.joystickThread.start()
+        if self.joystick.connected:
+            print("Starting joystick thread...")
+            self.joystickThread.start()
 
         self.enableControls()
 
