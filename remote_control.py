@@ -101,6 +101,10 @@ class RemoteControlWindow(QWidget):
 
         self.temperature = self.robot.getTemperature()
         self.humidity = self.robot.getHumidity()
+        self.orientation = self.robot.getOrientation()
+
+        print("T=%g C, Humidity=%g" % (self.temperature, self.humidity)) 
+        print(self.orientation) 
         
 
         d = sqrt(pow(x,2)+pow(y,2))
