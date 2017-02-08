@@ -34,6 +34,8 @@ class RemoteControlWindow(QWidget):
         self.backwardSpeed = 200
         self.rotateSpeed = 150
 
+        self.moving = False
+
         # Initalise joystick object
 
         i = 0
@@ -88,17 +90,30 @@ class RemoteControlWindow(QWidget):
         rx = self.joystick.rx
         ry = self.joystick.ry
         rt = self.joystick.rt
-        buttons_text = self.joystick.buttons_text
+        buttons_list = self.joystick.buttons_text.split()
         #print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, buttons_text, "                                "))
+        #print(buttons_text.split())
+        if len(buttons_list)>0:
+            if buttons_list[0] == "a":
+                self.robot.clear(255,255,255)
+        else:
+            self.robot.clear(0,0,0)
+
+        self.temperature = self.robot.getTemperature()
+        self.humidity = self.robot.getHumidity()
+        
 
         d = sqrt(pow(x,2)+pow(y,2))
 
         if d>0.1:
             self.robot.doMotor(9,-self.forwardSpeed*(y+x));
             self.robot.doMotor(10,-self.forwardSpeed*(y-x));
+            self.moving = True
         else:
-            self.robot.doMotor(9,0);
-            self.robot.doMotor(10,0);
+            if self.moving:
+                self.robot.doMotor(9,0);
+                self.robot.doMotor(10,0);
+                self.moving = False
 
     @pyqtSlot()
     def on_connectButton_clicked(self):

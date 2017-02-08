@@ -7,7 +7,8 @@ from sense_hat import SenseHat
 class RaspiRobot(object):
 	def __init__(self):
 		self._controller = self.createAndSyncRobot()
-		self._sense = SenseHat()	
+		self._sense = SenseHat()
+		self._sense.set_imu_config(True, True, True)
 
 	def doMotor(self, port, speed):
 		self._controller.doMotor(port, speed)
@@ -53,6 +54,18 @@ class RaspiRobot(object):
 
 	def getTemperature(self):
 		return self._sense.get_temperature()
+
+	def getOrientation(self):
+                return self._sense.get_orientation_degrees()
+
+        def getCompass(self):
+                return self._sense.get_compass()
+
+        def getGyroscope(self):
+            return self._sense.get_gyroscope()
+
+        def getAccelerometer(self):
+            return self._sense.sense.get_accelerometer()
 
 	def createAndSyncRobot(self):
 		bot = mBot()
