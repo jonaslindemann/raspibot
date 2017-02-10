@@ -117,12 +117,13 @@ class RemoteControlWindow(QWidget):
         ry = self.joystick.ry
         rt = self.joystick.rt
         buttons_list = self.joystick.buttons_text.split()
-        print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, self.joystick.buttons_text, "                                "))
+        # print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, self.joystick.buttons_text, "                                "))
         # print(buttons_text.split())
-        #if len(buttons_list) > 0:
-        #    if buttons_list[0] == "a":
-        #        self.robot.clear(255, 255, 255)
-        #else:
+        if len(buttons_list) > 0:
+            if buttons_list[0] == "a":
+                self.robot.clear(255, 255, 255)
+            if buttons_list[0] == "b":
+                self.robot.clear(0,0,0)
         #    self.robot.clear(0, 0, 0)
 
         # print("T=%g C, Humidity=%g" % (self.temperature, self.humidity))
@@ -141,6 +142,7 @@ class RemoteControlWindow(QWidget):
                 self.moving = False
 
     def on_sensor_update(self):
+        print("sensor update")
         self.pitchDial.setValue(self.orientation[b"pitch"])
         self.rollDial.setValue(self.orientation[b"roll"])
         self.yawDial.setValue(self.orientation[b"yaw"])
