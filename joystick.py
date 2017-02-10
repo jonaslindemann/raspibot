@@ -93,6 +93,7 @@ class Joystick(object):
     def __init__(self, joyId):
 
         self.button_names = ['a', 'b', 'x', 'y', 'tl', 'tr', 'back', 'start', 'thumbl', 'thumbr']
+        self.button_names += ['1','2','3','4','5','6','7','8','9','z','h',]
         self.povbtn_names = ['dpad_up', 'dpad_right', 'dpad_down', 'dpad_left']    
         
         # Get the number of supported devices (usually 16).
@@ -107,7 +108,7 @@ class Joystick(object):
         self.info = JOYINFO()
         self.p_info = ctypes.pointer(self.info)
         self.connected = True
-        if joyGetPos(0, self.p_info) != 0:
+        if joyGetPos(self.joy_id, self.p_info) != 0:
             print("Joystick %d not plugged in." % (self.joy_id + 1))
             self.connected = False
 
