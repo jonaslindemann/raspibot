@@ -3,6 +3,8 @@ import serial, time
 
 from lib.mOrion import *
 from sense_hat import SenseHat
+from picamera import PiCamera
+from io import BytesIO
 
 class RaspiRobot(object):
 	def __init__(self):
@@ -53,19 +55,49 @@ class RaspiRobot(object):
 		return self._sense.get_humidity()
 
 	def getTemperature(self):
-		return self._sense.get_temperature()
+		return self._sense.get_temperature_from_humidity()
+
+	def getPressure(self):
+		return self._sense.get_pressure()
 
 	def getOrientation(self):
-                return self._sense.get_orientation_degrees()
+		return self._sense.get_orientation_degrees()
 
-        def getCompass(self):
-                return self._sense.get_compass()
+	def getCompass(self):
+		return self._sense.get_compass()
 
-        def getGyroscope(self):
-            return self._sense.get_gyroscope()
+	def getGyroscope(self):
+		return self._sense.get_gyroscope()
 
-        def getAccelerometer(self):
-            return self._sense.sense.get_accelerometer()
+	def getAccelerometer(self):
+		return self._sense.sense.get_accelerometer()
+
+        def captureImage(self):
+
+            print("Capture image")
+
+            camera = None
+            captureOk = True
+            
+            try:
+                image = BytesIO()
+                camera = PiCamera()
+                camera.resolution = (1280,1024)
+                camera.iso = 800
+                camera.capture(image, 'png')
+            except Exception as e:
+                print("Capture image failed...")
+                print(e)
+                captureOk = False
+            finally:
+                if camera!=None:
+                    camera.close()
+
+            if captureOk:
+                print("Returning image...")
+                return image.getvalue()
+            else:
+                return b'0'
 
 	def createAndSyncRobot(self):
 		bot = mBot()
