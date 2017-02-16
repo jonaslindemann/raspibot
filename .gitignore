@@ -88,3 +88,4 @@ ENV/
 .ropeproject
 *.xml
 .idea/raspibot.iml
+*.png

@@ -1,13 +1,28 @@
 import sys
 import zerorpc, time
 
-from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
+from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QApplication, QDialog, QWidget
+from PyQt5.QtGui import QPixmap
 from PyQt5.uic import loadUi
 from math import *
 
-from joystick import Joystick
+from joystick import *
 
+class JoystickThread(QThread):
+    update = pyqtSignal()
+    def __init__(self, parent, joystick):
+        super(JoystickThread, self).__init__(parent)
+        self.joystick = joystick
+
+    def run(self):
+        while True:
+            self.joystick.poll()
+            self.update.emit()
+            time.sleep(0.2)
+
+    def stop(self):
+        self.terminate()
 
 class SensorThread(QThread):
     update = pyqtSignal()
@@ -23,26 +38,10 @@ class SensorThread(QThread):
         while True:
             self.parent.temperature = sensors.getTemperature()
             self.parent.humidity = sensors.getHumidity()
+            self.parent.pressure = sensors.getPressure()
             self.parent.orientation = sensors.getOrientation()
             self.update.emit()
             self.msleep(500)
-
-    def stop(self):
-        self.terminate()
-
-
-class JoystickThread(QThread):
-    update = pyqtSignal()
-
-    def __init__(self, parent, joystick):
-        super(JoystickThread, self).__init__(parent)
-        self.joystick = joystick
-
-    def run(self):
-        while True:
-            self.joystick.poll()
-            self.msleep(100)
-            self.update.emit()
 
     def stop(self):
         self.terminate()
@@ -55,9 +54,9 @@ class RemoteControlWindow(QWidget):
 
         # Defined speed limits
 
-        self.forwardSpeed = 250
-        self.backwardSpeed = 250
-        self.rotateSpeed = 150
+        self.forwardSpeed = 500
+        self.backwardSpeed = 500
+        self.rotateSpeed = 300
 
         self.moving = False
 
@@ -67,16 +66,27 @@ class RemoteControlWindow(QWidget):
 
         self.sensorThread = None
 
+        self.hasJoystick = False
+        self.x = 0
+        self.y = 0
+
+        # Initialise xinput joystick
+        
         # Initalise joystick object
 
         i = 0
-        self.joystick = Joystick(0)
+        self.joystick = Joystick(i)
         while not self.joystick.connected:
             i = i + 1
             self.joystick = Joystick(i)
             if i > 4:
                 break
 
+        if self.joystick.connected:
+            self.joystickThread = JoystickThread(self, self.joystick)
+            self.joystickThread.setTerminationEnabled(True)
+            self.joystickThread.update.connect(self.on_joystickUpdate)
+       
         # Load user interface from UI-file
 
         loadUi('remote_control.ui', self)
@@ -106,10 +116,10 @@ class RemoteControlWindow(QWidget):
         self.disconnectButton.setEnabled(True)
         self.testButton.setEnabled(True)
         self.connectButton.setEnabled(False)
-
-    def on_joystick_update(self):
+        
+    def on_joystickUpdate(self):
         """Handle joystick updates"""
-
+        
         x = self.joystick.x
         y = self.joystick.y
         lt = self.joystick.lt
@@ -117,17 +127,17 @@ class RemoteControlWindow(QWidget):
         ry = self.joystick.ry
         rt = self.joystick.rt
         buttons_list = self.joystick.buttons_text.split()
-        # print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, self.joystick.buttons_text, "                                "))
+        # print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, buttons_list, "                                "))
         # print(buttons_text.split())
         if len(buttons_list) > 0:
             if buttons_list[0] == "a":
                 self.robot.clear(255, 255, 255)
-            if buttons_list[0] == "b":
-                self.robot.clear(0,0,0)
-        #    self.robot.clear(0, 0, 0)
+        else:
+            self.robot.clear(0, 0, 0)
 
-        # print("T=%g C, Humidity=%g" % (self.temperature, self.humidity))
-        # print(self.orientation)
+        self.temperature = self.robot.getTemperature()
+        self.humidity = self.robot.getHumidity()
+        
 
         d = sqrt(pow(x, 2) + pow(y, 2))
 
@@ -139,13 +149,15 @@ class RemoteControlWindow(QWidget):
             if self.moving:
                 self.robot.doMotor(9, 0);
                 self.robot.doMotor(10, 0);
-                self.moving = False
-
+                self.moving = False  
+                
     def on_sensor_update(self):
-        print("sensor update")
         self.pitchDial.setValue(self.orientation[b"pitch"])
         self.rollDial.setValue(self.orientation[b"roll"])
         self.yawDial.setValue(self.orientation[b"yaw"])
+        self.temperatureSlider.setValue(self.temperature)
+        self.humiditySlider.setValue(self.humidity)
+        self.pressureSlider.setValue(self.pressure)
 
     @pyqtSlot()
     def on_connectButton_clicked(self):
@@ -154,11 +166,6 @@ class RemoteControlWindow(QWidget):
 
         print("Connecting...")
         self.robot.connect("tcp://raspi3.home.local:4242")
-
-        if self.joystick.connected:
-            self.joystickThread = JoystickThread(self, self.joystick)
-            self.joystickThread.setTerminationEnabled(True)
-            self.joystickThread.update.connect(self.on_joystick_update)        
 
         if self.joystick.connected:
             print("Starting joystick thread...")
@@ -176,8 +183,10 @@ class RemoteControlWindow(QWidget):
     def on_disconnectButton_clicked(self):
         print("Close robot")
         self.robot.clear(0, 0, 0)
-        print("Stopping joystick thread")
-        self.joystickThread.stop()
+        self.timer.stop()
+        # if self.hasJoystick:
+        #    print("Stopping joystick thread")
+        #    self.joystickThread.stop()
         print("Stopping sensor thread")
         self.sensorThread.stop()
         self.robot.close()
@@ -186,9 +195,18 @@ class RemoteControlWindow(QWidget):
 
     @pyqtSlot()
     def on_testButton_clicked(self):
-        self.robot.showLetter("T")
-        time.sleep(2)
-        self.robot.clear(0, 0, 0)
+        print("Capturing image start...")
+        image = self.robot.captureImage()
+
+        pixmap = QPixmap()
+        pixmap.loadFromData(image)
+
+        self.previewImageLabel.setPixmap(pixmap)
+        
+        # imageFile = open("image.png", "wb")
+        # imageFile.write(image)
+        # imageFile.close()
+        print("Capture complete.")
 
     @pyqtSlot()
     def on_forwardButton_pressed(self):
