@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QApplication, QDialog, QWidget
 from PyQt5.QtGui import QPixmap
 from PyQt5.uic import loadUi
 from math import *
+from socket import socket, AF_INET, SOCK_DGRAM
 
 from joystick import *
 
@@ -54,9 +55,9 @@ class RemoteControlWindow(QWidget):
 
         # Defined speed limits
 
-        self.forwardSpeed = 500
-        self.backwardSpeed = 500
-        self.rotateSpeed = 300
+        self.forwardSpeed = 250
+        self.backwardSpeed = 250
+        self.rotateSpeed = 150
 
         self.moving = False
 
@@ -94,6 +95,27 @@ class RemoteControlWindow(QWidget):
         # Initially disable controls        
 
         self.disable_controls()
+
+        self.raspibotIp = self.findRaspiBot()
+
+    def findRaspiBot(self):
+        
+        PORT = 50000
+        MAGIC = b"raspibot"    
+
+        print("Opening socket...")
+        s = socket(AF_INET, SOCK_DGRAM) #create UDP socket
+        print("Binding to port...")
+        s.bind(('', PORT))
+
+        print("Receive data")
+        data, addr = s.recvfrom(1024) #wait for a packet
+
+        if data.startswith(MAGIC):
+            print("got service announcement from", data[len(MAGIC):])
+
+        return str(addr[0])
+        
 
     def disable_controls(self):
         """Disable all controls"""
@@ -142,6 +164,7 @@ class RemoteControlWindow(QWidget):
         d = sqrt(pow(x, 2) + pow(y, 2))
 
         if d > 0.1:
+            print(-self.forwardSpeed * (y + x), -self.forwardSpeed * (y - x))
             self.robot.doMotor(9, -self.forwardSpeed * (y + x));
             self.robot.doMotor(10, -self.forwardSpeed * (y - x));
             self.moving = True
@@ -164,8 +187,9 @@ class RemoteControlWindow(QWidget):
         print("Creating client...")
         self.robot = zerorpc.Client()
 
-        print("Connecting...")
-        self.robot.connect("tcp://raspi3.home.local:4242")
+        print("Connecting to %s" % self.raspibotIp)
+        #self.robot.connect("tcp://raspi3.home.local:4242")
+        self.robot.connect("tcp://%s:4242" % self.raspibotIp)
 
         if self.joystick.connected:
             print("Starting joystick thread...")
