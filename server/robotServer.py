@@ -6,13 +6,32 @@ from sense_hat import SenseHat
 from picamera import PiCamera
 from io import BytesIO
 
+from robotBroadCast import *
+from multiprocessing import Process
+
+def broadCaster(iface):
+    broadcast = RaspiBotBroadCaster("wlan0")
+    broadcast.connect()
+
+    while True:
+        broadcast.broadCast()
+        time.sleep(4)
+    
 class RaspiRobot(object):
 	def __init__(self):
+	        print("Initialising interface to Orion board...")
 		self._controller = self.createAndSyncRobot()
+		
+		print("Initialising SenseHat...")
 		self._sense = SenseHat()
 		self._sense.set_imu_config(True, True, True)
-
+		
+		print("Starting BroadCaster...")
+		self.broadCastProcess = Process(target = broadCaster, args = ("wlan0",))
+		self.broadCastProcess.start()
+		
 	def doMotor(self, port, speed):
+	        print(port, speed)
 		self._controller.doMotor(port, speed)
 
 	def showMessage(self, message):
@@ -101,26 +120,24 @@ class RaspiRobot(object):
 
 	def createAndSyncRobot(self):
 		bot = mBot()
+		#bot.startWithSerial("/dev/ttyACM0")
 		bot.startWithSerial("/dev/ttyUSB0")
 		#bot.startWithHID()
-
-		print("Syncing with Orion board...")
 
 		for i in range(5):
 			bot.doMotor(9,0)
 			bot.doMotor(10,0)
 
 		sleep(3)
-		print("Completed...")
 
 		return bot
 
 if __name__ == "__main__":
     	
-    	print("Creating robot controller class...")
+    	print("RaspiBot Server 1.0 starting...")
 	robot = RaspiRobot()
 	
-	print("Start ZeroRPC server...")
+	print("Starting ZeroRPC server...")
 	s = zerorpc.Server(robot)
 	s.bind("tcp://0.0.0.0:4242")
 	s.run()    
