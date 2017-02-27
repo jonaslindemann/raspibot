@@ -1,14 +1,17 @@
 import sys
-import zerorpc, time
+import zerorpc
+import time
 
-from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal, QTimer
+from math import *
+from socket import *
+
+from PyQt5.QtCore import pyqtSlot, QThread, pyqtSignal
 from PyQt5.QtWidgets import QApplication, QDialog, QWidget
 from PyQt5.QtGui import QPixmap
 from PyQt5.uic import loadUi
-from math import *
-from socket import socket, AF_INET, SOCK_DGRAM
 
 from joystick import *
+from raspibot import *
 
 class JoystickThread(QThread):
     update = pyqtSignal()
@@ -28,13 +31,14 @@ class JoystickThread(QThread):
 class SensorThread(QThread):
     update = pyqtSignal()
 
-    def __init__(self, parent):
+    def __init__(self, parent, ip):
         super(SensorThread, self).__init__(parent)
         self.parent = parent
+        self.ip = ip
 
     def run(self):
         sensors = zerorpc.Client()
-        sensors.connect("tcp://raspi3.home.local:4242")
+        sensors.connect("tcp://%s:4242" % self.ip)
         
         while True:
             self.parent.temperature = sensors.getTemperature()
@@ -49,9 +53,11 @@ class SensorThread(QThread):
 
 
 class RemoteControlWindow(QWidget):
-    def __init__(self, *args):
+    def __init__(self, robot):
         """Constructor"""
-        super(RemoteControlWindow, self).__init__(*args)
+        super(RemoteControlWindow, self).__init__()
+        
+        self.robot = robot
 
         # Defined speed limits
 
@@ -71,8 +77,6 @@ class RemoteControlWindow(QWidget):
         self.x = 0
         self.y = 0
 
-        # Initialise xinput joystick
-        
         # Initalise joystick object
 
         i = 0
@@ -92,31 +96,14 @@ class RemoteControlWindow(QWidget):
 
         loadUi('remote_control.ui', self)
 
-        # Initially disable controls        
-
-        self.disable_controls()
-
-        self.raspibotIp = self.findRaspiBot()
-
-    def findRaspiBot(self):
+        # Initially disable controls
+       
+        print("Starting sensor thread...")
+        self.sensorThread = SensorThread(self, self.robot.ip)
+        self.sensorThread.setTerminationEnabled(True)
+        self.sensorThread.update.connect(self.on_sensor_update)
+        self.sensorThread.start()
         
-        PORT = 50000
-        MAGIC = b"raspibot"    
-
-        print("Opening socket...")
-        s = socket(AF_INET, SOCK_DGRAM) #create UDP socket
-        print("Binding to port...")
-        s.bind(('', PORT))
-
-        print("Receive data")
-        data, addr = s.recvfrom(1024) #wait for a packet
-
-        if data.startswith(MAGIC):
-            print("got service announcement from", data[len(MAGIC):])
-
-        return str(addr[0])
-        
-
     def disable_controls(self):
         """Disable all controls"""
         self.backButton.setEnabled(False)
@@ -149,7 +136,8 @@ class RemoteControlWindow(QWidget):
         ry = self.joystick.ry
         rt = self.joystick.rt
         buttons_list = self.joystick.buttons_text.split()
-        # print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt, rx, ry, rt, buttons_list, "                                "))
+        # print("\r(% .3f % .3f % .3f) (% .3f % .3f % .3f)%s%s" % (x, y, lt,
+        # rx, ry, rt, buttons_list, " "))
         # print(buttons_text.split())
         if len(buttons_list) > 0:
             if buttons_list[0] == "a":
@@ -165,13 +153,13 @@ class RemoteControlWindow(QWidget):
 
         if d > 0.1:
             print(-self.forwardSpeed * (y + x), -self.forwardSpeed * (y - x))
-            self.robot.doMotor(9, -self.forwardSpeed * (y + x));
-            self.robot.doMotor(10, -self.forwardSpeed * (y - x));
+            self.robot.doMotor(9, -self.forwardSpeed * (y + x))
+            self.robot.doMotor(10, -self.forwardSpeed * (y - x))
             self.moving = True
         else:
             if self.moving:
-                self.robot.doMotor(9, 0);
-                self.robot.doMotor(10, 0);
+                self.robot.doMotor(9, 0)
+                self.robot.doMotor(10, 0)
                 self.moving = False  
                 
     def on_sensor_update(self):
@@ -184,33 +172,12 @@ class RemoteControlWindow(QWidget):
 
     @pyqtSlot()
     def on_connectButton_clicked(self):
-        print("Creating client...")
-        self.robot = zerorpc.Client()
-
-        print("Connecting to %s" % self.raspibotIp)
-        #self.robot.connect("tcp://raspi3.home.local:4242")
-        self.robot.connect("tcp://%s:4242" % self.raspibotIp)
-
-        if self.joystick.connected:
-            print("Starting joystick thread...")
-            self.joystickThread.start()
-
-        print("Starting sensor thread...")
-        self.sensorThread = SensorThread(self)
-        self.sensorThread.setTerminationEnabled(True)
-        self.sensorThread.update.connect(self.on_sensor_update)
-        self.sensorThread.start()
-
-        self.enable_controls()
+        self.connectToRobot()
 
     @pyqtSlot()
     def on_disconnectButton_clicked(self):
         print("Close robot")
         self.robot.clear(0, 0, 0)
-        self.timer.stop()
-        # if self.hasJoystick:
-        #    print("Stopping joystick thread")
-        #    self.joystickThread.stop()
         print("Stopping sensor thread")
         self.sensorThread.stop()
         self.robot.close()
@@ -236,65 +203,71 @@ class RemoteControlWindow(QWidget):
     def on_forwardButton_pressed(self):
         self.robot.setRotation(90)
         self.robot.showLetter("F")
-        self.robot.doMotor(9, self.forwardSpeed);
-        self.robot.doMotor(10, self.forwardSpeed);
+        self.robot.doMotor(9, self.forwardSpeed)
+        self.robot.doMotor(10, self.forwardSpeed)
 
     @pyqtSlot()
     def on_forwardButton_released(self):
         self.robot.setRotation(90)
         self.robot.clear(0, 0, 0)
-        self.robot.doMotor(9, 0);
-        self.robot.doMotor(10, 0);
+        self.robot.doMotor(9, 0)
+        self.robot.doMotor(10, 0)
 
     @pyqtSlot()
     def on_backButton_pressed(self):
         self.robot.setRotation(90)
         self.robot.showLetter("B")
-        self.robot.doMotor(9, -self.backwardSpeed);
-        self.robot.doMotor(10, -self.backwardSpeed);
+        self.robot.doMotor(9, -self.backwardSpeed)
+        self.robot.doMotor(10, -self.backwardSpeed)
 
     @pyqtSlot()
     def on_backButton_released(self):
         self.robot.setRotation(90)
         self.robot.clear(0, 0, 0)
-        self.robot.doMotor(9, 0);
-        self.robot.doMotor(10, 0);
+        self.robot.doMotor(9, 0)
+        self.robot.doMotor(10, 0)
 
     @pyqtSlot()
     def on_turnLeftButton_pressed(self):
         self.robot.setRotation(90)
         self.robot.showLetter("L")
-        self.robot.doMotor(9, self.rotateSpeed);
-        self.robot.doMotor(10, -self.rotateSpeed);
+        self.robot.doMotor(9, self.rotateSpeed)
+        self.robot.doMotor(10, -self.rotateSpeed)
 
     @pyqtSlot()
     def on_turnLeftButton_released(self):
         self.robot.setRotation(90)
         self.robot.clear(0, 0, 0)
-        self.robot.doMotor(9, 0);
-        self.robot.doMotor(10, 0);
+        self.robot.doMotor(9, 0)
+        self.robot.doMotor(10, 0)
 
     @pyqtSlot()
     def on_turnRightButton_pressed(self):
         self.robot.setRotation(90)
         self.robot.showLetter("R")
-        self.robot.doMotor(9, -self.rotateSpeed);
-        self.robot.doMotor(10, self.rotateSpeed);
+        self.robot.doMotor(9, -self.rotateSpeed)
+        self.robot.doMotor(10, self.rotateSpeed)
 
     @pyqtSlot()
     def on_turnRightButton_released(self):
         self.robot.setRotation(90)
         self.robot.clear(0, 0, 0)
-        self.robot.doMotor(9, 0);
-        self.robot.doMotor(10, 0);
+        self.robot.doMotor(9, 0)
+        self.robot.doMotor(10, 0)
 
     @pyqtSlot()
     def on_stopButton_clicked(self):
-        self.robot.doMotor(9, 0);
-        self.robot.doMotor(10, 0);
+        self.robot.doMotor(9, 0)
+        self.robot.doMotor(10, 0)
+        
+def remoteControl(robot):
+    app = QApplication(sys.argv)
+    widget = RemoteControlWindow(robot)
+    widget.show()
+    sys.exit(app.exec_())  
 
-
-app = QApplication(sys.argv)
-widget = RemoteControlWindow()
-widget.show()
-sys.exit(app.exec_())
+if __name__ == "__main__":
+    
+    bot = RaspiBot()
+    bot.connect()    
+    remoteControl(bot)
