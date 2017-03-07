@@ -20,124 +20,128 @@ def broadCaster(iface):
         time.sleep(4)
     
 class RaspiRobot(object):
-	def __init__(self):
-		print("Initialising interface to Orion board...")
-		self._controller = self.createAndSyncRobot()
+    def __init__(self):
+            print("Initialising interface to Orion board...")
+        self._controller = self.createAndSyncRobot()
+        
+        print("Initialising SenseHat...")
+        self._sense = SenseHat()
+        self._sense.set_imu_config(True, True, True)
+        
+        print("Starting BroadCaster...")
+        self.broadCastProcess = Process(target=broadCaster, args=("wlan0",))
+        self.broadCastProcess.start()
+        
+    def doMotor(self, port, speed):
+            print(port, speed)
+        self._controller.doMotor(port, speed)
 
-		print("Initialising SenseHat...")
-		self._sense = SenseHat()
-		self._sense.set_imu_config(True, True, True)
+    def showMessage(self, message):
+        self._sense.show_message(message)
 
-		print("Starting BroadCaster...")
-		self.broadCastProcess = Process(target = broadCaster, args = ("wlan0",))
-		self.broadCastProcess.start()
-		
-	def stopBroadCaster(self):
-		print("Stopping broadcaster...")
-		self.broadCastProcess.terminate()
-		self.broadCastProcess.join()
-				
-	def doMotor(self, port, speed):
-	        print(port, speed)
-		self._controller.doMotor(port, speed)
+    def clear(self, r, g, b):
+        self._sense.clear([r, g, b])
 
-	def showMessage(self, message):
-		self._sense.show_message(message)
+    def setRotation(self, angle):
+        self._sense.set_rotation(angle)
 
-	def clear(self, r, g, b):
-		self._sense.clear([r, g, b])
+    def flipVert(self):
+        self._sense.flip_v()
 
-	def setRotation(self, angle):
-		self._sense.set_rotation(angle)
+    def flipHoriz(self):
+        self._sense.flip_h()
 
-	def flipVert(self):
-		self._sense.flip_v()
+    def setPixels(self, pixels):
+        self._sense.set_pixels(pixels)
 
-	def flipHoriz(self):
-		self._sense.flip_h()
+    def getPixels(self):
+        return self._sense.get_pixels()
 
-	def setPixels(self, pixels):
-		self._sense.set_pixels(pixels)
+    def setPixel(self, x, y, r, g, b):
+        self._sense.set_pixel(x, y, r, g, b)
 
-	def getPixels(self):
-		return self._sense.get_pixels()
+    def setPixel(self, x, y, pixel):
+        self._sense.set_pixel(x, y, pixel)
 
-	def setPixel(self, x, y, r, g, b):
-		self._sense.set_pixel(x, y, r, g, b)
+    def getPixel(self, x, y):
+        return self._sense.get_pixel(x, y)
 
-	def setPixel(self, x, y, pixel):
-		self._sense.set_pixel(x, y, pixel)
+    def showLetter(self, s, textColor=[255, 255, 255], backColor=[0, 0, 0]):
+        self._sense.show_letter(s, textColor, backColor)
 
-	def getPixel(self, x, y):
-		return self._sense.get_pixel(x, y)
+    def setLowLight(self, flag):
+        self._sense.low_light = flag
 
-	def showLetter(self, s, textColor = [255, 255, 255], backColor = [0,0,0]):
-		self._sense.show_letter(s, textColor, backColor)
+    def getHumidity(self):
+        return self._sense.get_humidity()
 
-	def setLowLight(self, flag):
-		self._sense.low_light = flag
+    def getTemperature(self):
+        return self._sense.get_temperature_from_humidity()
 
-	def getHumidity(self):
-		return self._sense.get_humidity()
+    def getPressure(self):
+        return self._sense.get_pressure()
 
-	def getTemperature(self):
-		return self._sense.get_temperature_from_humidity()
+    def getOrientation(self):
+        return self._sense.get_orientation_degrees()
 
-	def getPressure(self):
-		return self._sense.get_pressure()
+    def getCompass(self):
+        return self._sense.get_compass()
 
-	def getOrientation(self):
-		return self._sense.get_orientation_degrees()
+    def getGyroscope(self):
+        return self._sense.get_gyroscope()
 
-	def getCompass(self):
-		return self._sense.get_compass()
+    def getAccelerometer(self):
+        return self._sense.sense.get_accelerometer()
 
-	def getGyroscope(self):
-		return self._sense.get_gyroscope()
+    def captureImage(self):
+                
+        print("Capture image")
+    
+        camera = None
+        captureOk = True
+        
+        try:
+            image = BytesIO()
+            camera = PiCamera()
+            camera.resolution = (1280, 1024)
+            camera.iso = 800
+            camera.capture(image, 'png')
+        except Exception as e:
+            print("Capture image failed...")
+            print(e)
+            captureOk = False
+        finally:
+            if camera != None:
+                camera.close()
+    
+        if captureOk:
+            print("Returning image...")
+            return image.getvalue()
+        else:
+            return b'0'
 
-	def getAccelerometer(self):
-		return self._sense.sense.get_accelerometer()
-
-        def captureImage(self):
-
-            print("Capture image")
-
-            camera = None
-            captureOk = True
-            
-            try:
-                image = BytesIO()
-                camera = PiCamera()
-                camera.resolution = (1280,1024)
-                camera.iso = 800
-                camera.capture(image, 'png')
-            except Exception as e:
-                print("Capture image failed...")
-                print(e)
-                captureOk = False
-            finally:
-                if camera!=None:
-                    camera.close()
-
-            if captureOk:
-                print("Returning image...")
-                return image.getvalue()
-            else:
-                return b'0'
-
+<<<<<<< HEAD
 	def createAndSyncRobot(self):
 		bot = mBot()
 		bot.startWithSerial("/dev/ttyUSB0")
+=======
+    def createAndSyncRobot(self):
+        bot = mBot()
+        # bot.startWithSerial("/dev/ttyACM0")
+        bot.startWithSerial("/dev/ttyUSB0")
+        # bot.startWithHID()
+>>>>>>> 236a13d5017e83e468ebb62c8d1fa6c6272d2a11
 
-		for i in range(5):
-			bot.doMotor(9,0)
-			bot.doMotor(10,0)
+        for i in range(5):
+            bot.doMotor(9, 0)
+            bot.doMotor(10, 0)
 
-		sleep(3)
+        sleep(3)
 
-		return bot
+        return bot
 
 if __name__ == "__main__":
+<<<<<<< HEAD
 
 	print("RaspiBot Server 1.0 starting...")
 	robot = RaspiRobot()
@@ -147,3 +151,13 @@ if __name__ == "__main__":
 	s = zerorpc.Server(robot)
 	s.bind("tcp://0.0.0.0:4242")
 	s.run()    
+=======
+        
+        print("RaspiBot Server 1.0 starting...")
+    robot = RaspiRobot()
+    
+    print("Starting ZeroRPC server...")
+    s = zerorpc.Server(robot)
+    s.bind("tcp://0.0.0.0:4242")
+    s.run()    
+>>>>>>> 236a13d5017e83e468ebb62c8d1fa6c6272d2a11
