@@ -1,0 +1,5 @@
+#!/bin/sh
+
+RASPIBOT_DIR=/home/pi/Development/raspibot
+PYTHONPATH=$RASPIBOT_DIR/server
+python $RASPIBOT_DIR/server/robotServer.py

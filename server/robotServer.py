@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import zerorpc
 import serial, time
 
@@ -19,17 +21,22 @@ def broadCaster(iface):
     
 class RaspiRobot(object):
 	def __init__(self):
-	        print("Initialising interface to Orion board...")
+		print("Initialising interface to Orion board...")
 		self._controller = self.createAndSyncRobot()
-		
+
 		print("Initialising SenseHat...")
 		self._sense = SenseHat()
 		self._sense.set_imu_config(True, True, True)
-		
+
 		print("Starting BroadCaster...")
 		self.broadCastProcess = Process(target = broadCaster, args = ("wlan0",))
 		self.broadCastProcess.start()
 		
+	def stopBroadCaster(self):
+		print("Stopping broadcaster...")
+		self.broadCastProcess.terminate()
+		self.broadCastProcess.join()
+				
 	def doMotor(self, port, speed):
 	        print(port, speed)
 		self._controller.doMotor(port, speed)
@@ -120,9 +127,7 @@ class RaspiRobot(object):
 
 	def createAndSyncRobot(self):
 		bot = mBot()
-		#bot.startWithSerial("/dev/ttyACM0")
 		bot.startWithSerial("/dev/ttyUSB0")
-		#bot.startWithHID()
 
 		for i in range(5):
 			bot.doMotor(9,0)
@@ -133,9 +138,10 @@ class RaspiRobot(object):
 		return bot
 
 if __name__ == "__main__":
-    	
-    	print("RaspiBot Server 1.0 starting...")
+
+	print("RaspiBot Server 1.0 starting...")
 	robot = RaspiRobot()
+	robot.showLetter("R")
 	
 	print("Starting ZeroRPC server...")
 	s = zerorpc.Server(robot)

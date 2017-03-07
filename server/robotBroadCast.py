@@ -25,10 +25,10 @@ class RaspiBotBroadCaster(object):
         print("Local ip = %s" % self.ipNumber)
         
     def connect(self):
-        self.s = socket(AF_INET, SOCK_DGRAM) #create UDP socket
-        self.s.bind(('', 0))
-        self.s.setsockopt(SOL_SOCKET, SO_BROADCAST, 1) #this is a broadcast socket
-        self.isConnected = True
+		self.s = socket(AF_INET, SOCK_DGRAM) #create UDP socket
+		self.s.bind(('', 0))
+		self.s.setsockopt(SOL_SOCKET, SO_BROADCAST, 1) #this is a broadcast socket
+		self.isConnected = True
         
     def close(self):
         if self.isConnected:
@@ -37,9 +37,9 @@ class RaspiBotBroadCaster(object):
         self.isConnected = False
         
     def broadCast(self):
-        if self.isConnected:
-            data = self.magic+self.ipNumber
-            self.s.sendto(data, ('<broadcast>', self.port))
+		if self.isConnected:
+			data = self.magic+self.ipNumber
+			self.s.sendto(data, ('<broadcast>', self.port))
         
 if __name__ == "__main__":
 
